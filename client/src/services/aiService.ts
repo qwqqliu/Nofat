@@ -5,7 +5,7 @@ const MODEL_NAME = 'google/gemini-2.5-flash-lite';
 
 // 添加诊断日志
 console.log('🔧 AI Service 初始化');
-console.log('API Key:', OPENROUTER_API_KEY ? 'Loaded' : 'Missing');
+console.log('API Key:', OPENROUTER_API_KEY.substring(0, 20) + '...');
 console.log('API URL:', OPENROUTER_API_URL);
 console.log('Model:', MODEL_NAME);
 
@@ -19,7 +19,7 @@ export interface AIRequestOptions {
   // 健身信息
   goal: string;
   level: string;
-  frequency: string; // 这里包含具体的星期和时间
+  frequency: string; // 这里现在包含具体的星期和时间，例如 "每周 3 天：[周一、周三]..."
   duration: string;
   preference: string;
   injuryHistory?: string; // 伤病史
@@ -40,109 +40,74 @@ export interface WorkoutPlan {
  * 生成 AI 定制训练计划 - 基于真实个人数据
  */
 export async function generateAIWorkoutPlan(options: AIRequestOptions): Promise<WorkoutPlan> {
-  // 1. 验证必要信息
+  // 验证必要的个人信息
   if (!options.age || !options.gender || !options.height || !options.weight) {
     throw new Error('缺少必要的个人信息：年龄、性别、身高、体重');
   }
 
-  // 2. 👇 核心修改：在这里直接构建 Prompt，强调时间安排
-  // 我们特意强调了 "frequency" 字段，因为前端现在传过来的是 "每周3天：[周一、周三]..."
-  const prompt = `
-    你是一位拥有20年经验的专业健身教练。请根据以下用户数据，生成一份详细的周训练计划。
-
-    【用户画像】
-    - 基本数据：${options.age}岁 / ${options.gender === 'male' ? '男' : '女'} / ${options.height}cm / ${options.weight}kg
-    - 核心目标：${options.goal} (请针对此目标设计)
-    - 当前水平：${options.level}
-    - 训练偏好：${options.preference} (请根据偏好选择动作)
-    - 身体状况：${options.injuryHistory || '无伤病'}
-    - 备注说明：${options.notes || '无'}
-    
-    【🔴 重点约束 - 时间安排】
-    用户的具体时间表是："${options.frequency}"。
-    请严格按照用户选择的“星期几”来安排训练日。
-    例如：如果用户只选了“周一、周三”，那么只有这两天有具体训练内容，其他日子标记为“休息日”或“主动恢复”。
-    
-    【输出格式要求】
-    必须返回纯 JSON 格式，不要包含 Markdown 标记（如 \`\`\`json）。结构如下：
-    {
-      "name": "给计划起个霸气的名字",
-      "goal": { "name": "目标", "focus": "一句话重点" },
-      "level": "${options.level}",
-      "duration": "${options.duration}",
-      "frequency": "${options.frequency}", 
-      "workouts": [
-        {
-          "day": "周一",
-          "name": "训练日标题 (如果是休息日则填'休息')",
-          "duration": "${options.duration} (如果是休息日填0)",
-          "exercises": [
-             // 如果是休息日，这里留空数组 []
-             // 如果是训练日，列出动作：
-             { "name": "动作名称", "sets": "组数", "reps": "次数/时长", "rest": "休息时间" }
-          ]
-        }
-        // ... 请必须生成从 "周一" 到 "周日" 的完整7天数据
-      ],
-      "tips": ["给出的3条专业饮食或恢复建议"]
-    }
-  `;
+  const prompt = buildPrompt(options);
   
   try {
-    console.log('📤 发送 AI 请求...');
-    
-    // 3. 发送请求 (OpenRouter / Gemini)
-    // 注意：这里复用了你 Chat 功能的后端接口，或者是直接调用 OpenRouter
-    // 如果你是前端直接调用 OpenRouter，保持你原有的 fetch 逻辑
-    // 如果你是通过后端转发，请确保这里指向 '/api/chat/message' 或类似的端点
-    
-    // 假设你前端直接调 OpenRouter (根据你之前的 APITestPage 推断):
-    const apiKey = localStorage.getItem('ai_api_key') || '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'; // 这里可以用你写死的 Key
-    
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    console.log('📤 发送 AI 计划生成请求...');
+    console.log('用户信息:', {
+      age: options.age,
+      gender: options.gender,
+      height: options.height,
+      weight: options.weight,
+      goal: options.goal,
+      schedule: options.frequency, // 打印时间安排
+    });
+
+    const requestBody = {
+      model: MODEL_NAME,
+      messages: [
+        {
+          role: 'system',
+          content: '你是一个只输出 JSON 的 API。严禁输出 Markdown 标记（如 ```json）。严禁输出任何解释性文字。',
+        },
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ],
+      temperature: 0.7,
+      max_tokens: 4000, // 增加 token 限制以确保完整输出
+    };
+
+    const response = await fetch(OPENROUTER_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-        'HTTP-Referer': window.location.href,
-        'X-Title': 'Nofat Fitness',
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'HTTP-Referer': window.location.href, // 动态获取当前域名
+        'X-Title': 'Nofat-Fitness',
       },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash-lite', // 保持使用 Gemini
-        messages: [
-          {
-            role: 'system',
-            content: '你是一个只输出 JSON 的 API。不要输出任何解释性文字。'
-          },
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
-        temperature: 0.7,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
+    console.log('📥 API 响应状态:', response.status, response.statusText);
+
     if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`API 请求失败: ${errText}`);
+      const errorData = await response.json().catch(() => ({}));
+      console.error('❌ OpenRouter API 错误:', {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorData,
+      });
+      throw new Error(`API 错误: ${response.status} ${response.statusText}`);
     }
 
     const data = await response.json();
-    const content = data.choices[0]?.message?.content;
-
-    if (!content) throw new Error('AI 未返回内容');
-
-    // 4. 解析 JSON
-    // 有时候 AI 会带上 ```json 前缀，我们需要清理掉
-    const jsonString = content.replace(/```json/g, '').replace(/```/g, '').trim();
-    const plan = JSON.parse(jsonString);
-
+    console.log('✅ AI 计划生成成功');
+    const content = data.choices[0].message.content;
+    
+    // 解析 AI 返回的计划
+    const plan = parseAIPlan(content, options);
     return plan;
-
   } catch (error) {
-    console.error('AI 生成出错:', error);
-    throw error;
+    console.error('❌ 调用 AI 服务失败:', error);
+    // 如果 API 调用失败，返回默认计划
+    return generateDefaultPlan(options);
   }
 }
 
@@ -164,55 +129,86 @@ function buildPrompt(options: AIRequestOptions): string {
   };
 
   const preferenceMap: any = {
-    'home': '在家 (无器械或小器械)',
-    'gym': '健身房 (器械齐全)',
+    'home': '在家',
+    'gym': '健身房',
   };
 
   const genderText = options.gender === 'male' ? '男性' : '女性';
   const bmi = (options.weight / ((options.height / 100) * (options.height / 100))).toFixed(1);
 
-  let personalInfo = `请为一名${genderText}客户生成私人定制训练计划。
-【客户档案】
+  let personalInfo = `请为一名${genderText}客户生成私人定制训练计划，客户个人信息如下：
 - 年龄：${options.age}岁
-- 身体数据：${options.height}cm / ${options.weight}kg (BMI: ${bmi})`;
+- 性别：${genderText}
+- 身高：${options.height}cm
+- 体重：${options.weight}kg
+- BMI指数：${bmi}`;
 
-  if (options.waistCircumference) personalInfo += `\n- 腰围：${options.waistCircumference}cm`;
-  if (options.injuryHistory) personalInfo += `\n- ⚠️ 伤病史：${options.injuryHistory}`;
-  if (options.notes) personalInfo += `\n- 📝 特殊说明：${options.notes}`;
+  if (options.waistCircumference) {
+    personalInfo += `\n- 腰围：${options.waistCircumference}cm`;
+  }
+
+  if (options.injuryHistory) {
+    personalInfo += `\n- 伤病史：${options.injuryHistory}`;
+  }
+
+  if (options.notes) {
+    personalInfo += `\n- 特殊说明：${options.notes}`;
+  }
 
   return `${personalInfo}
 
-【训练目标与限制】
-- 核心目标：${goalMap[options.goal] || options.goal}
-- 训练水平：${levelMap[options.level] || options.level}
-- 训练场地：${preferenceMap[options.preference] || options.preference}
-- 单次时长：${options.duration}
+训练目标与偏好：
+- 主要目标：${goalMap[options.goal]}
+- 训练水平：${levelMap[options.level]}
+- 训练场地：${preferenceMap[options.preference]}
+- 每次训练时长：${options.duration}
 - 📅 时间安排：${options.frequency} 
   (请严格按照上方指定的时间安排生成日程。例如用户选了“周一、周三”，则只有这两天安排训练，其余时间标记为“休息”)
 
-【输出要求】
-请生成一个纯 JSON 对象，不要包含 Markdown 格式。结构如下：
+请根据以上客户的个人信息（年龄、性别、身高、体重、BMI等）和训练目标，生成一个私人定制的周期性训练计划。计划应该：
+1. 针对性强，充分考虑客户的身体状况
+2. 科学合理，符合其训练水平
+3. 循序渐进，有明确的进度安排
+4. 包含热身、主训练、放松三个阶段
+5. 提供具体的动作名称和次数/时间
+6. 包含营养建议
+7. 包含安全注意事项
+
+请以以下JSON格式返回计划，不要包含任何其他文本（也不要包含 Markdown 代码块标记）：
 {
-  "name": "给计划起个响亮的名字",
-  "goal": { "name": "目标名称", "focus": "一句话重点" },
-  "level": "${levelMap[options.level] || options.level}",
-  "frequency": "${options.frequency}",
-  "duration": "${options.duration}",
+  "name": "计划名称（如：李四12周增肌计划）",
+  "duration": "计划周期（如：12周）",
+  "goal": {
+    "name": "目标名称",
+    "focus": "训练重点",
+    "expectedResults": "预期效果"
+  },
+  "personalizedAnalysis": "基于客户信息的个性化分析（1-2句）",
+  "weeklySchedule": {
+    "Monday": {"name": "训练名称", "duration": "时长", "description": "简短描述"},
+    "Tuesday": {"name": "训练名称", "duration": "时长", "description": "简短描述"},
+    "Wednesday": {"name": "训练名称", "duration": "时长", "description": "简短描述"},
+    "Thursday": {"name": "训练名称", "duration": "时长", "description": "简短描述"},
+    "Friday": {"name": "训练名称", "duration": "时长", "description": "简短描述"},
+    "Saturday": {"name": "训练名称", "duration": "时长", "description": "简短描述"},
+    "Sunday": {"name": "训练名称", "duration": "时长", "description": "简短描述"}
+  },
   "workouts": [
     {
-      "day": "周一 (请对应实际安排)", 
       "name": "训练日标题 (休息日填'休息')",
+      "day": "周几 (请对应实际安排)",
       "duration": "${options.duration} (休息日填'0')",
       "exercises": [
         // 如果是训练日，列出动作。如果是休息日，此数组为空 []
-        {"name": "动作名称", "sets": "组数", "reps": "次数/时间", "rest": "休息时间"}
+        {"name": "动作名", "sets": "组数", "reps": "次数/时间", "rest": "休息时间"},
+        {"name": "动作名", "sets": "组数", "reps": "次数/时间", "rest": "休息时间"}
       ]
     }
     // ... 必须生成从周一到周日完整的7天数据
   ],
-  "nutritionTips": ["3条简短的饮食建议 (带Emoji)"],
-  "tips": ["3条简短的恢复建议 (带Emoji)"],
-  "warnings": ["注意事项 (带Emoji)"]
+  "nutritionTips": ["营养建议1", "营养建议2", "营养建议3"],
+  "tips": ["训练小贴士1", "训练小贴士2", "训练小贴士3"],
+  "warnings": ["注意事项1", "注意事项2"]
 }`;
 }
 
@@ -223,7 +219,7 @@ function parseAIPlan(content: string, options: AIRequestOptions): WorkoutPlan {
   try {
     // 清理 Markdown 标记 (防止 AI 输出 ```json)
     const cleanContent = content.replace(/```json/g, '').replace(/```/g, '').trim();
-    
+
     // 提取 JSON 内容
     const jsonMatch = cleanContent.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
@@ -242,10 +238,10 @@ function parseAIPlan(content: string, options: AIRequestOptions): WorkoutPlan {
     const workouts = parsed.workouts || [];
     
     return {
-      name: parsed.name || 'AI 定制计划',
+      name: parsed.name || '定制训练计划',
       level: levelMap[options.level] || parsed.level || '定制',
       goal: parsed.goal || { name: '健身目标', focus: '提升身体素质' },
-      frequency: options.frequency, // 使用前端传来的格式化字符串
+      frequency: options.frequency, // 使用前端传来的完整时间字符串
       duration: options.duration,
       workouts: workouts.length > 0 ? workouts : [],
       tips: [...(parsed.nutritionTips || []), ...(parsed.tips || [])],
@@ -257,7 +253,7 @@ function parseAIPlan(content: string, options: AIRequestOptions): WorkoutPlan {
 }
 
 /**
- * 生成默认计划（当 AI 调用失败时，完整兜底逻辑）
+ * 生成默认计划（当 AI 调用失败时）
  */
 function generateDefaultPlan(options: AIRequestOptions): WorkoutPlan {
   const goalMap: any = {
@@ -297,12 +293,12 @@ function generateDefaultPlan(options: AIRequestOptions): WorkoutPlan {
   };
 
   // 智能周计划生成逻辑 (根据用户选择的 frequency 动态生成)
+  // 防止 AI 挂了之后，这里还能根据用户选的星期排课
   const fallbackWorkouts = [];
   const days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
   
   for (let day of days) {
     // 检查用户的 frequency 字符串是否包含当前星期
-    // 前端传来的格式如："每周 3 天：[周一、周三、周五]..."
     if (options.frequency && options.frequency.includes(day)) {
       fallbackWorkouts.push({
         day: day,
@@ -338,11 +334,17 @@ function generateDefaultPlan(options: AIRequestOptions): WorkoutPlan {
 }
 
 /**
- * 获取 AI 训练建议 (用于首页统计卡片)
+ * 获取 AI 训练建议
  */
 export async function getAIFitnessAdvice(userStatus: any): Promise<string> {
-  const prompt = `基于用户数据：本周训练${userStatus.weeklyWorkouts||0}次，时长${userStatus.weeklyMinutes||0}分钟，消耗${userStatus.weeklyCalories||0}kcal。体重${userStatus.weight||0}kg，目标${userStatus.goal||'健康'}。
-  请用一句话给出鼓励建议（带Emoji）。`;
+  const prompt = `基于以下用户健身数据，请提供个性化的训练建议：
+- 本周完成训练：${userStatus.weeklyWorkouts || 0} 次
+- 本周总时长：${userStatus.weeklyMinutes || 0} 分钟
+- 燃烧卡路里：${userStatus.weeklyCalories || 0} kcal
+- 当前体重：${userStatus.weight || 0} kg
+- 当前目标：${userStatus.goal || '保持健康'}
+
+请给出 2-3 条个性化的、鼓励性的建议。`;
 
   try {
     const response = await fetch(OPENROUTER_API_URL, {
@@ -355,34 +357,62 @@ export async function getAIFitnessAdvice(userStatus: any): Promise<string> {
       },
       body: JSON.stringify({
         model: MODEL_NAME,
-        messages: [{ role: 'user', content: prompt }],
+        messages: [
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
         temperature: 0.7,
-        max_tokens: 200,
+        max_tokens: 500,
       }),
     });
 
-    if (!response.ok) throw new Error('API Error');
+    if (!response.ok) {
+      throw new Error(`API 错误: ${response.status}`);
+    }
+
     const data = await response.json();
     return data.choices[0].message.content;
   } catch (error) {
-    return '坚持就是胜利！保持训练节奏，你正在变得更强！💪';
+    console.error('获取 AI 建议失败:', error);
+    return '继续坚持训练，你的进步会逐步显现！';
   }
 }
 
 /**
- * AI 问答对话 - Nofat 人设版
+ * AI 问答对话 - 用于健身相关问题 (Nofat 人设)
  */
 export async function askAIQuestion(question: string, userContext?: any): Promise<string> {
   let systemPrompt = `你叫 "Nofat"，是用户的健身AI朋友。
 
 【回复规则】
-1. **排版美化**：严禁使用星号 (*, -)。必须使用 Emoji (🎯, 🔍, 🍎, 🏃‍♂️, 💪, ⚠️) 作为列表头。
-2. **篇幅控制**：回答要简明扼要，不要太啰嗦，除非用户追问。
-3. **语气风格**：轻松、像朋友一样交流，不要显示"Gemini"或"机器人"身份。
-4. **思考状态**：如果需要思考，直接显示"思考中..."。`;
+✓ 核心原则：简洁有力，不要长篇大论
+✓ 结构清晰：用emoji标记要点，不要使用* ** *** 等符号
+✓ 循序渐进：先给基础答案，再询问是否需要深入
+✓ 人性化：像朋友一样交流，不要冗长的学术科普
+
+【回答格式示例】
+🎯 核心要点：（2-3句话，直接回答问题）
+✅ 关键步骤：（用编号1️⃣ 2️⃣ 3️⃣等简列，每点一句话）
+⚠️ 常见误区：（1-2个最重要的）
+❓ 需要了解更多吗？（询问是否需要进阶内容、细节纠正、营养建议等）
+
+【具体要求】
+1. 不要超过200字，除非用户明确要求详细
+2. 不要出现Markdown的* ** *** 符号，改用 🎯 ✅ 🔍 ⚠️ 💡 🏋️ 📊 等emoji
+3. 对初级用户，先给基础动作，再问"需要学进阶版本吗？"
+4. 对图片分析（食物/动作），直接给数字和结论，少说为什么
+5. 语言亲切自然，像健身房里的教练和朋友，不要提及Gemini等身份`;
   
   if (userContext) {
-    systemPrompt += `\n【用户数据】等级:${userContext.level} | 目标:${userContext.goal}`;
+    systemPrompt += `
+
+【用户信息】
+🎯 等级：${userContext.level}${userContext.level === '初级' ? '（建议从基础开始）' : '（可以加强进阶内容）'}
+👤 年龄：${userContext.age}岁 | 体重：${userContext.weight}kg
+🎪 目标：${userContext.goal}
+${userContext.injuryHistory ? `⚠️ 注意：${userContext.injuryHistory}` : ''}`;
   }
 
   try {
@@ -391,8 +421,14 @@ export async function askAIQuestion(question: string, userContext?: any): Promis
     const requestBody = {
       model: MODEL_NAME,
       messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: question },
+        {
+          role: 'system',
+          content: systemPrompt,
+        },
+        {
+          role: 'user',
+          content: question,
+        },
       ],
       temperature: 0.7,
       max_tokens: 800,
@@ -422,11 +458,11 @@ export async function askAIQuestion(question: string, userContext?: any): Promis
 }
 
 /**
- * 流式 AI 问答 (模拟流式输出)
+ * 流式 AI 问答 - 返回可处理的异步生成器（支持渐进式输出）
  */
 export async function* streamAIQuestion(question: string, userContext?: any): AsyncGenerator<string> {
   const content = await askAIQuestion(question, userContext);
-  // 模拟流式输出，每 5 个字符输出一次，提升体验
+  // 模拟流式输出
   const chunkSize = 5;
   for (let i = 0; i < content.length; i += chunkSize) {
     yield content.slice(i, i + chunkSize);
