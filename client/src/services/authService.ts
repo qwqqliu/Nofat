@@ -1,6 +1,8 @@
+// ↓↓↓ 确保这里从 config 导入
 import { API_BASE_URL } from './config';
+
 // 认证服务 - 处理注册、登录、令牌管理
-const API_URL = '/api';
+// const API_URL = '/api';  <-- 【删除这行】这行是罪魁祸首！
 const STORAGE_KEY_TOKEN = 'auth_token';
 const STORAGE_KEY_USER = 'current_user';
 
@@ -26,6 +28,7 @@ export interface AuthResponse {
  */
 export async function register(email: string, password: string): Promise<AuthResponse> {
   try {
+    // 这里你写的是对的，用的是 API_BASE_URL
     const response = await fetch(`${API_BASE_URL}/auth/register`, {
       method: 'POST',
       headers: {
@@ -46,7 +49,6 @@ export async function register(email: string, password: string): Promise<AuthRes
       };
     }
 
-    // 保存token和用户信息
     if (data.token) {
       localStorage.setItem(STORAGE_KEY_TOKEN, data.token);
       localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(data.user));
@@ -59,7 +61,7 @@ export async function register(email: string, password: string): Promise<AuthRes
       user: data.user,
     };
   } catch (error) {
-    console.error('注册请求异常:', error); // 打印详细错误
+    console.error('注册请求异常:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : '网络错误',
@@ -72,7 +74,8 @@ export async function register(email: string, password: string): Promise<AuthRes
  */
 export async function login(email: string, password: string): Promise<AuthResponse> {
   try {
-    const response = await fetch(`${API_URL}/auth/login`, {
+    // ↓↓↓ 【修改这里】 把 API_URL 改成 API_BASE_URL
+    const response = await fetch(`${API_BASE_URL}/auth/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -92,7 +95,6 @@ export async function login(email: string, password: string): Promise<AuthRespon
       };
     }
 
-    // 保存token和用户信息
     if (data.token) {
       localStorage.setItem(STORAGE_KEY_TOKEN, data.token);
       localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(data.user));
@@ -112,9 +114,7 @@ export async function login(email: string, password: string): Promise<AuthRespon
   }
 }
 
-/**
- * 游客登录（本地）
- */
+// ... 下面的代码保持不变 ...
 export function loginAsGuest(): AuthResponse {
   const guestUser: User = {
     id: 'guest_' + Date.now(),
@@ -135,9 +135,6 @@ export function loginAsGuest(): AuthResponse {
   };
 }
 
-/**
- * 获取当前用户
- */
 export function getCurrentUser(): User | null {
   const userStr = localStorage.getItem(STORAGE_KEY_USER);
   if (!userStr) return null;
@@ -148,23 +145,14 @@ export function getCurrentUser(): User | null {
   }
 }
 
-/**
- * 获取认证令牌
- */
 export function getToken(): string | null {
   return localStorage.getItem(STORAGE_KEY_TOKEN);
 }
 
-/**
- * 检查用户是否已认证
- */
 export function isAuthenticated(): boolean {
   return getCurrentUser() !== null;
 }
 
-/**
- * 登出
- */
 export function logout(): void {
   localStorage.removeItem(STORAGE_KEY_TOKEN);
   localStorage.removeItem(STORAGE_KEY_USER);
