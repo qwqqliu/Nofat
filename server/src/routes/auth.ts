@@ -4,15 +4,10 @@ import { body, validationResult } from 'express-validator';
 import User from '../models/User';
 
 const router = express.Router();
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'a_very_long_and_secure_default_secret_key_for_testing';
-
-const generateToken = (userId: string, email: string): string => {
-  return jwt.sign(
-    { userId, email },
-    JWT_SECRET,
-    { expiresIn: '30d' }
-  );
+const generateToken = (userId: string): string => {
+  return jwt.sign({ id: userId }, JWT_SECRET, { expiresIn: '30d' });
 };
 
 /**
@@ -32,36 +27,33 @@ router.post(
         return;
       }
 
-      const { email, password } = req.body;
+      const { email, password, name } = req.body;
 
-      // 检查用户是否已存在
-      const existingUser = await User.findOne({ email });
+      // Sequelize 查询
+      const existingUser = await User.findOne({ where: { email } });
       if (existingUser) {
         res.status(400).json({ message: '该邮箱已被注册' });
         return;
       }
 
-      // 创建新用户
-      const user = new User({
+      const finalName = name && name.trim() !== '' ? name : email.split('@')[0];
+
+      const user = await User.create({
         email,
         password,
-        name: email.split('@')[0], // 默认使用邮箱前缀作为名称
+        name: finalName,
       });
 
-      const savedUser = await user.save();
-
-      // 生成token
-      const token = generateToken(savedUser._id.toString(), savedUser.email);
+      const token = generateToken(user.id);
 
       res.status(201).json({
         message: '注册成功',
         token,
         user: {
-          id: savedUser._id,
-          email: savedUser.email,
-          name: savedUser.name,
+          id: user.id,
+          email: user.email,
+          name: user.name,
           isGuest: false,
-          createdAt: user.createdAt,
         },
       });
     } catch (error) {
@@ -90,32 +82,29 @@ router.post(
 
       const { email, password } = req.body;
 
-      // 查找用户
-      const user = await User.findOne({ email }).select('+password');
+      const user = await User.findOne({ where: { email } });
       if (!user) {
         res.status(401).json({ message: '邮箱或密码错误' });
         return;
       }
 
-      // 验证密码
       const isPasswordValid = await user.comparePassword(password);
       if (!isPasswordValid) {
         res.status(401).json({ message: '邮箱或密码错误' });
         return;
       }
 
-      // 生成token
-      const token = generateToken(user._id.toString(), user.email);
+      const token = generateToken(user.id);
 
       res.json({
         message: '登录成功',
         token,
         user: {
-          id: user._id,
+          id: user.id,
           email: user.email,
           name: user.name,
+          avatar: user.avatar,
           isGuest: false,
-          createdAt: user.createdAt,
         },
       });
     } catch (error) {
@@ -136,10 +125,10 @@ router.get('/me', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_secret') as {
-      userId: string;
-    };
-    const user = await User.findById(decoded.userId);
+    const decoded = jwt.verify(token, JWT_SECRET) as { id: string };
+    
+    // Sequelize 使用 findByPk
+    const user = await User.findByPk(decoded.id);
 
     if (!user) {
       res.status(404).json({ message: '用户不存在' });
@@ -148,9 +137,10 @@ router.get('/me', async (req: Request, res: Response): Promise<void> => {
 
     res.json({
       user: {
-        id: user._id,
+        id: user.id,
         email: user.email,
         name: user.name,
+        avatar: user.avatar,
         contactPhone: user.contactPhone,
         contactAddress: user.contactAddress,
         isGuest: false,
