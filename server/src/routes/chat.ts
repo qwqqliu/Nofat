@@ -24,15 +24,14 @@ router.post(
       }
 
       const { role, content, imageData } = req.body;
-
-      const message = new AIChatMessage({
-        userId: req.userId,
+      
+      // 使用非空断言 req.userId!，因为 authMiddleware 保证了它存在
+      const message = await AIChatMessage.create({
+        userId: req.userId!,
         role,
         content,
         imageData: imageData || null,
       });
-
-      await message.save();
 
       res.status(201).json({
         message: '消息保存成功',
@@ -50,19 +49,23 @@ router.post(
  */
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const limit = parseInt(req.query.limit as string) || 50; // 默认获取最近50条
+    const limit = parseInt(req.query.limit as string) || 50; 
     const skip = parseInt(req.query.skip as string) || 0;
 
-    const messages = await AIChatMessage.find({ userId: req.userId })
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .skip(skip);
+    // Sequelize 分页查询
+    const { count, rows } = await AIChatMessage.findAndCountAll({
+      where: { userId: req.userId! },
+      order: [['createdAt', 'DESC']], // 按时间倒序取最新的
+      limit: limit,
+      offset: skip,
+    });
 
-    const total = await AIChatMessage.countDocuments({ userId: req.userId });
+    // 翻转数组，让前端按时间顺序显示（旧 -> 新）
+    const messages = rows.reverse();
 
     res.json({
-      messages: messages.reverse(), // 反转使其按时间顺序显示
-      total,
+      messages,
+      total: count,
       limit,
       skip,
     });
@@ -77,11 +80,14 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response): Promise
  */
 router.delete('/', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const result = await AIChatMessage.deleteMany({ userId: req.userId });
+    // Sequelize 删除
+    const deletedCount = await AIChatMessage.destroy({
+      where: { userId: req.userId! }
+    });
 
     res.json({
       message: '聊天历史已清空',
-      deletedCount: result.deletedCount,
+      deletedCount,
     });
   } catch (error) {
     console.error('删除聊天历史错误:', error);
@@ -94,12 +100,14 @@ router.delete('/', authMiddleware, async (req: AuthRequest, res: Response): Prom
  */
 router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const message = await AIChatMessage.findOneAndDelete({
-      _id: req.params.id,
-      userId: req.userId,
+    const deletedCount = await AIChatMessage.destroy({
+      where: {
+        id: req.params.id,
+        userId: req.userId!
+      }
     });
 
-    if (!message) {
+    if (deletedCount === 0) {
       res.status(404).json({ message: '消息不存在' });
       return;
     }
