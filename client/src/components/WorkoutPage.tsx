@@ -208,10 +208,16 @@ export function WorkoutPage() {
     setAiStep('loading');
     
     try {
+      // 👇👇👇 修改开始：获取当前用户名字并传入 👇👇👇
+      const userProfile = getUserProfile();
+      const userName = userProfile?.name || userProfile?.email?.split('@')[0] || '';
+
       const aiRequestData = {
         ...formData,
+        name: userName, // <--- 关键点：把名字传给 AI 服务
         frequency: `每周 ${formData.selectedDays.length} 天：[${formData.selectedDays.join('、')}]，时间：${formData.preferredTime}`
       };
+      // 👆👆👆 修改结束 👆👆👆
 
       let plan = await generateAIWorkoutPlan(aiRequestData);
       
