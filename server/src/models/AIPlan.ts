@@ -1,61 +1,75 @@
-import mongoose from 'mongoose';
+import { DataTypes, Model, Optional } from 'sequelize';
+import sequelize from '../config/database';
 
-export interface IAIPlan {
-  _id?: string;
+interface AIPlanAttributes {
+  id: string;
   userId: string;
   name: string;
   goal: string;
   level: string;
   frequency: string;
   duration: string;
-  planData: Record<string, any>; // 完整的计划数据（JSON格式）
-  createdAt: Date;
-  updatedAt: Date;
+  planData: any; // 这里存储 JSON 数据
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
-const AIPlanSchema = new mongoose.Schema(
+interface AIPlanCreationAttributes extends Optional<AIPlanAttributes, 'id'> {}
+
+class AIPlan extends Model<AIPlanAttributes, AIPlanCreationAttributes> implements AIPlanAttributes {
+  public id!: string;
+  public userId!: string;
+  public name!: string;
+  public goal!: string;
+  public level!: string;
+  public frequency!: string;
+  public duration!: string;
+  public planData!: any;
+  
+  public readonly createdAt!: Date;
+  public readonly updatedAt!: Date;
+}
+
+AIPlan.init(
   {
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true,
+    },
     userId: {
-      type: String,
-      required: [true, '用户ID不能为空'],
-      index: true,
+      type: DataTypes.UUID,
+      allowNull: false,
     },
     name: {
-      type: String,
-      required: [true, '计划名称不能为空'],
+      type: DataTypes.STRING,
+      allowNull: false,
     },
     goal: {
-      type: String,
-      required: true,
+      type: DataTypes.STRING,
+      allowNull: false,
     },
     level: {
-      type: String,
-      required: true,
+      type: DataTypes.STRING,
+      allowNull: false,
     },
     frequency: {
-      type: String,
-      required: true,
+      type: DataTypes.STRING,
+      allowNull: false,
     },
     duration: {
-      type: String,
-      required: true,
+      type: DataTypes.STRING,
+      allowNull: false,
     },
     planData: {
-      type: mongoose.Schema.Types.Mixed,
-      required: true,
-    },
-    createdAt: {
-      type: Date,
-      default: Date.now,
-    },
-    updatedAt: {
-      type: Date,
-      default: Date.now,
+      type: DataTypes.JSON, // PostgreSQL 支持 JSON 类型，完美！
+      allowNull: false,
     },
   },
   {
-    timestamps: true,
+    sequelize,
+    tableName: 'ai_plans',
   }
 );
 
-export default mongoose.model<IAIPlan>('AIPlan', AIPlanSchema);
+export default AIPlan;
