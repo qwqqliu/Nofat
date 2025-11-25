@@ -1,8 +1,6 @@
 import { API_BASE_URL } from './config';
 
-// AI 服务 - 后端代理模式 (融合原版逻辑)
-// const MODEL_NAME = 'google/gemini-2.5-flash-lite'; // 注意：模型现在由后端控制，前端无法直接指定
-
+// AI 服务 - 前端适配新后端逻辑
 // 添加诊断日志
 console.log('🔧 AI Service 初始化 (Backend Proxy Mode)');
 console.log('Backend URL:', API_BASE_URL);
@@ -35,7 +33,8 @@ export interface WorkoutPlan {
 }
 
 /**
- * 生成 AI 定制训练计划 - 调用后端接口
+ * 1. 生成 AI 定制训练计划
+ * 修正点：使用 save: false 防止存入数据库，使用 system 字段强制 JSON 格式
  */
 export async function generateAIWorkoutPlan(options: AIRequestOptions): Promise<WorkoutPlan> {
   // 验证必要的个人信息
@@ -43,22 +42,14 @@ export async function generateAIWorkoutPlan(options: AIRequestOptions): Promise<
     throw new Error('缺少必要的个人信息：年龄、性别、身高、体重');
   }
 
-  // 构建包含严格系统指令的 Prompt
   const prompt = buildPrompt(options);
   
   try {
     console.log('📤 请求后端生成 AI 计划...');
-    console.log('用户信息:', {
-      age: options.age,
-      goal: options.goal,
-      schedule: options.frequency
-    });
     
-    // 获取用户 Token
     const token = localStorage.getItem('auth_token');
     if (!token) throw new Error('未登录');
 
-    // 发送请求
     const response = await fetch(`${API_BASE_URL}/chat/message`, {
       method: 'POST',
       headers: {
@@ -66,9 +57,15 @@ export async function generateAIWorkoutPlan(options: AIRequestOptions): Promise<
         'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify({
-        // 将 System 的约束指令拼接在最前面，确保 AI 遵守格式
-        content: `[SYSTEM: 你是一个只输出 JSON 的 API。严禁输出 Markdown 标记（如 \`\`\`json）。严禁输出任何解释性文字。]\n\n${prompt}`,
-        role: 'user' // 大部分后端接口只接受 user 角色
+        // 👇 核心修复 1：明确告诉后端不要保存这条记录！(解决 Bug)
+        save: false,
+        
+        // 👇 核心修复 2：将格式约束放在 system 字段，而不是拼接在 content 里
+        system: '你是一个只输出 JSON 的 API。严禁输出 Markdown 标记（如 ```json）。严禁输出任何解释性文字。',
+        
+        // content 只放纯粹的数据提示词
+        content: prompt,
+        role: 'user'
       }),
     });
 
@@ -79,7 +76,7 @@ export async function generateAIWorkoutPlan(options: AIRequestOptions): Promise<
     const data = await response.json();
     console.log('✅ 后端 AI 响应成功');
 
-    // 兼容后端不同的返回结构
+    // 兼容后端返回结构 (根据你新后端的逻辑，临时消息可能在 data.content)
     const content = data.content || data.data?.content || data.message;
     
     if (!content || typeof content !== 'string') {
@@ -88,8 +85,7 @@ export async function generateAIWorkoutPlan(options: AIRequestOptions): Promise<
     }
 
     // 解析 AI 返回的计划
-    const plan = parseAIPlan(content, options);
-    return plan;
+    return parseAIPlan(content, options);
 
   } catch (error) {
     console.error('❌ AI 生成失败，转为兜底计划:', error);
@@ -98,8 +94,111 @@ export async function generateAIWorkoutPlan(options: AIRequestOptions): Promise<
 }
 
 /**
- * 构建提示词 - 融合了原版的详细数据和第二版的时间逻辑
+ * 2. 获取 AI 训练建议
+ * 修正点：同样增加 save: false，避免这些小建议污染聊天记录
  */
+export async function getAIFitnessAdvice(userStatus: any): Promise<string> {
+  const prompt = `基于以下用户健身数据，请提供 2-3 条个性化的、鼓励性的建议（使用 Emoji）：
+- 本周完成训练：${userStatus.weeklyWorkouts || 0} 次
+- 本周总时长：${userStatus.weeklyMinutes || 0} 分钟
+- 燃烧卡路里：${userStatus.weeklyCalories || 0} kcal
+- 当前体重：${userStatus.weight || 0} kg
+- 当前目标：${userStatus.goal || '保持健康'}`;
+
+  try {
+    const token = localStorage.getItem('auth_token');
+    if (!token) return '坚持就是胜利！💪';
+
+    const response = await fetch(`${API_BASE_URL}/chat/message`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ 
+        content: prompt, 
+        role: 'user',
+        // 👇 同样不保存到聊天记录
+        save: false, 
+        system: '你是一个专业的健身数据分析师，请给出简短、鼓励性的建议。' 
+      }),
+    });
+
+    if (!response.ok) throw new Error('API Error');
+    const data = await response.json();
+    return data.content || data.data?.content || '坚持就是胜利！💪';
+  } catch (error) {
+    return '继续坚持训练，你的进步会逐步显现！💪';
+  }
+}
+
+/**
+ * 3. AI 问答对话 (Nofat)
+ * 修正点：使用 system 参数传递人设，默认 save: true (保存聊天记录)
+ */
+export async function askAIQuestion(question: string, userContext?: any): Promise<string> {
+  try {
+    const token = localStorage.getItem('auth_token');
+    if (!token) return '请先登录';
+
+    // 1. 定义人设 (System Prompt)
+    const systemPrompt = `你叫 "Nofat"，是用户的健身AI朋友。
+【回复规则】
+✓ 核心原则：简洁有力，不要长篇大论，不要超过200字
+✓ 结构清晰：用emoji标记要点(🎯 ✅ ⚠️ 💡)，不要使用 Markdown 的 * ** 等符号
+✓ 语气：亲切自然，像健身房里的教练和朋友`;
+
+    // 2. 构建用户上下文 (拼接到 User Content 中)
+    let userContent = "";
+    if (userContext) {
+      userContent += `【用户信息：${userContext.level} | ${userContext.age}岁 | ${userContext.weight}kg | 目标:${userContext.goal}】\n`;
+    }
+    userContent += question;
+
+    const response = await fetch(`${API_BASE_URL}/chat/message`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        content: userContent,
+        role: 'user',
+        // 👇 聊天需要保存历史，这里可以传 true，也可以不传(如果后端默认是true)
+        save: true,
+        // 👇 将人设传给后端
+        system: systemPrompt
+      }),
+    });
+
+    if (!response.ok) throw new Error('后端请求失败');
+    
+    const data = await response.json();
+    return data.content || data.data?.content || 'AI 暂时无法回答';
+
+  } catch (error) {
+    console.error('AI 问答失败:', error);
+    return '抱歉，Nofat 暂时有点累，请稍后再试 😴';
+  }
+}
+
+/**
+ * 流式 AI 问答
+ */
+export async function* streamAIQuestion(question: string, userContext?: any): AsyncGenerator<string> {
+  const content = await askAIQuestion(question, userContext);
+  // 模拟流式输出
+  const chunkSize = 5;
+  for (let i = 0; i < content.length; i += chunkSize) {
+    yield content.slice(i, i + chunkSize);
+    await new Promise(r => setTimeout(r, 10)); 
+  }
+}
+
+// ==========================================
+// 下面是辅助函数，逻辑保持不变
+// ==========================================
+
 function buildPrompt(options: AIRequestOptions): string {
   const goalMap: any = {
     'weight-loss': '减脂塑形',
@@ -133,7 +232,6 @@ function buildPrompt(options: AIRequestOptions): string {
   if (options.injuryHistory) personalInfo += `\n- 伤病史：${options.injuryHistory}`;
   if (options.notes) personalInfo += `\n- 特殊说明：${options.notes}`;
 
-  // 融合原代码的详细要求和第二代码的 JSON 结构
   return `${personalInfo}
 
 训练目标与偏好：
@@ -175,7 +273,6 @@ function buildPrompt(options: AIRequestOptions): string {
       "day": "周几 (必须对应实际安排)",
       "duration": "${options.duration} (休息日填'0')",
       "exercises": [
-        // 如果是训练日，列出动作。如果是休息日，此数组为空 []
         {"name": "动作名", "sets": "组数", "reps": "次数/时间", "rest": "休息时间"}
       ]
     }
@@ -186,29 +283,16 @@ function buildPrompt(options: AIRequestOptions): string {
 }`;
 }
 
-/**
- * 解析 AI 返回的计划
- */
 function parseAIPlan(content: string, options: AIRequestOptions): WorkoutPlan {
   try {
-    // 清理 Markdown 标记 (防止 AI 输出 ```json)
     const cleanContent = content.replace(/```json/g, '').replace(/```/g, '').trim();
-    
-    // 提取 JSON 内容
     const jsonMatch = cleanContent.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       console.warn('未检测到 JSON，尝试兜底');
       return generateDefaultPlan(options);
     }
-
     const parsed = JSON.parse(jsonMatch[0]);
-    
-    const levelMap: any = {
-      'beginner': '初级',
-      'intermediate': '中级',
-      'advanced': '高级',
-    };
-
+    const levelMap: any = { 'beginner': '初级', 'intermediate': '中级', 'advanced': '高级' };
     const workouts = parsed.workouts || [];
     
     return {
@@ -226,9 +310,6 @@ function parseAIPlan(content: string, options: AIRequestOptions): WorkoutPlan {
   }
 }
 
-/**
- * 生成默认计划（当 AI 调用失败时）
- */
 function generateDefaultPlan(options: AIRequestOptions): WorkoutPlan {
   const goalMap: any = {
     'weight-loss': { name: '减脂塑形', focus: '有氧为主，力量为辅' },
@@ -302,104 +383,4 @@ function generateDefaultPlan(options: AIRequestOptions): WorkoutPlan {
       '训练后进行充分放松和恢复',
     ],
   };
-}
-
-/**
- * 获取 AI 训练建议 - 恢复了详细的 Prompt
- */
-export async function getAIFitnessAdvice(userStatus: any): Promise<string> {
-  // 恢复原版详细的 Prompt，确保回复质量
-  const prompt = `基于以下用户健身数据，请提供 2-3 条个性化的、鼓励性的建议（使用 Emoji）：
-- 本周完成训练：${userStatus.weeklyWorkouts || 0} 次
-- 本周总时长：${userStatus.weeklyMinutes || 0} 分钟
-- 燃烧卡路里：${userStatus.weeklyCalories || 0} kcal
-- 当前体重：${userStatus.weight || 0} kg
-- 当前目标：${userStatus.goal || '保持健康'}`;
-
-  try {
-    const token = localStorage.getItem('auth_token');
-    if (!token) return '坚持就是胜利！💪';
-
-    const response = await fetch(`${API_BASE_URL}/chat/message`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({ content: prompt, role: 'user' }),
-    });
-
-    if (!response.ok) throw new Error('API Error');
-    const data = await response.json();
-    return data.content || data.data?.content || '坚持就是胜利！💪';
-  } catch (error) {
-    return '继续坚持训练，你的进步会逐步显现！💪';
-  }
-}
-
-/**
- * AI 问答对话 - 重点修复：恢复 "Nofat" 教练人设
- */
-export async function askAIQuestion(question: string, userContext?: any): Promise<string> {
-  try {
-    const token = localStorage.getItem('auth_token');
-    if (!token) return '请先登录';
-
-    // 1. 恢复原代码中的 System Prompt (人设定义)
-    let systemPrompt = `[System Instructions]
-你叫 "Nofat"，是用户的健身AI朋友。
-【回复规则】
-✓ 核心原则：简洁有力，不要长篇大论，不要超过200字
-✓ 结构清晰：用emoji标记要点(🎯 ✅ ⚠️ 💡)，不要使用 Markdown 的 * ** 等符号
-✓ 语气：亲切自然，像健身房里的教练和朋友
-`;
-
-    // 2. 构造完整的 Prompt 发给后端
-    // 由于后端可能只接受 content，我们将 System Prompt 拼接在最前面
-    let fullContent = `${systemPrompt}\n\n`;
-    
-    if (userContext) {
-      fullContent += `【用户信息】
-🎯 等级：${userContext.level}${userContext.level === '初级' ? '（建议从基础开始）' : ''}
-👤 年龄：${userContext.age}岁 | 体重：${userContext.weight}kg
-🎪 目标：${userContext.goal}
-${userContext.injuryHistory ? `⚠️ 伤病：${userContext.injuryHistory}` : ''}\n\n`;
-    }
-
-    fullContent += `用户提问：${question}`;
-
-    const response = await fetch(`${API_BASE_URL}/chat/message`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        content: fullContent,
-        role: 'user'
-      }),
-    });
-
-    if (!response.ok) throw new Error('后端请求失败');
-    
-    const data = await response.json();
-    return data.content || data.data?.content || 'AI 暂时无法回答';
-
-  } catch (error) {
-    console.error('AI 问答失败:', error);
-    return '抱歉，Nofat 暂时有点累，请稍后再试 😴';
-  }
-}
-
-/**
- * 流式 AI 问答
- */
-export async function* streamAIQuestion(question: string, userContext?: any): AsyncGenerator<string> {
-  const content = await askAIQuestion(question, userContext);
-  // 模拟流式输出
-  const chunkSize = 5;
-  for (let i = 0; i < content.length; i += chunkSize) {
-    yield content.slice(i, i + chunkSize);
-    await new Promise(r => setTimeout(r, 10)); 
-  }
 }
