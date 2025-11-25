@@ -1,3 +1,11 @@
+// 👇 1. 强制使用 IPv4 (解决 Render 连接 Supabase 报错 ENETUNREACH 的关键!)
+import dns from 'node:dns';
+try {
+  dns.setDefaultResultOrder('ipv4first');
+} catch (e) {
+  console.log("Node version too old for setDefaultResultOrder, skipping...");
+}
+
 // 👇 1. 强力环境加载逻辑
 import path from 'path';
 import dotenv from 'dotenv';
