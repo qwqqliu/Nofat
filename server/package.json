@@ -2,7 +2,7 @@
   "name": "fitness-app-backend",
   "version": "1.0.0",
   "description": "Fitness App Backend API",
-  "main": "src/server.ts",
+  "main": "dist/server.js",
   "scripts": {
     "start": "node dist/server.js",
     "dev": "ts-node src/server.ts",
@@ -18,9 +18,7 @@
     "jsonwebtoken": "^9.0.2",
     "openai": "^6.9.1",
     "pg": "^8.11.3",
-    "sequelize": "^6.33.0"
-  },
-  "devDependencies": {
+    "sequelize": "^6.33.0",
     "@types/bcryptjs": "^2.4.2",
     "@types/cors": "^2.8.19",
     "@types/express": "^4.17.20",
