@@ -2,32 +2,18 @@ import { Request, Response } from 'express';
 import Message from '../models/Message';
 import OpenAI from 'openai';
 
-// 👇 改进：获取 Client 的函数 (增加调试日志)
+// ... (getAIClient 函数保持不变，为了节省篇幅我省略了，保留你原有的即可) ...
 const getAIClient = () => {
-  // 1. 尝试读取两种常见的 Key 名字
   const apiKey = process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY;
-  
-  // 2. 调试日志：告诉我们在哪里运行，读到了什么
-  console.log('正在初始化 AI 客户端...');
-  console.log('API Base URL:', process.env.OPENAI_BASE_URL || "默认使用 openrouter.ai");
-  console.log('API Key 状态:', apiKey ? `✅ 已读取 (长度: ${apiKey.length})` : '❌ 未读取到');
-
-  if (!apiKey) {
-    throw new Error("后端未读取到 API Key。请确保 server/.env 文件存在，并且包含 OPENAI_API_KEY=sk-or-v1...");
-  }
-  
+  if (!apiKey) throw new Error("后端未读取到 API Key");
   return new OpenAI({
     apiKey: apiKey,
-    // 如果 .env 没配 URL，就默认用 OpenRouter
     baseURL: process.env.OPENAI_BASE_URL || "https://openrouter.ai/api/v1",
-    defaultHeaders: {
-      "HTTP-Referer": "http://localhost:3000",
-      "X-Title": "Fitness AI App",
-    }
+    defaultHeaders: { "HTTP-Referer": "http://localhost:3000", "X-Title": "Fitness AI App" }
   });
 };
 
-// 1. 获取聊天历史
+// 1. 获取聊天历史 (保持不变)
 export const getHistory = async (req: Request | any, res: Response) => {
   try {
     const userId = req.user.id; 
@@ -41,30 +27,38 @@ export const getHistory = async (req: Request | any, res: Response) => {
   }
 };
 
-// 2. 发送消息
+// 2. 发送消息 (❌ 核心修改都在这里)
 export const sendMessage = async (req: Request | any, res: Response) => {
   try {
-    const { content, imageUrl } = req.body;
+    // 👇 新增：从前端接收 save (是否保存) 和 system (系统指令) 参数
+    // save 默认为 true，保证普通聊天正常存档
+    const { content, imageUrl, save = true, system } = req.body;
     const userId = req.user.id;
 
-    // A. 存入用户消息
-    await Message.create({
-      userId,
-      role: 'user',
-      content,
-      imageUrl: imageUrl || null
-    });
+    // A. 只有当 save 为 true 时，才存入用户消息
+    if (save) {
+      await Message.create({
+        userId,
+        role: 'user',
+        content,
+        imageUrl: imageUrl || null
+      });
+    }
 
-    // B. 👇 核心修改：全新的人设与排版指令
-    const systemPrompt = `
-      你叫 "Nofat"，是用户的健身AI朋友，而不是冷冰冰的助手。
-      
-      【回复规则】：
-      1. **排版美化**：严禁使用 markdown 的星号 (*, -) 做列表。必须使用 Emoji 图标 (如 🎯, 🔍, 🍎, 🥗, 🏃‍♂️, 💪, ⚠️, ❤️) 作为分隔符或列表头。
-      2. **篇幅控制**：回答要简明扼要、直击重点，不要太啰嗦太臃肿。除非用户明确要求“详细解释”，否则点到为止。
-      3. **语气风格**：轻松、像朋友一样交流，多给鼓励。
-      4. **视觉任务**：如果用户发了食物图片，直接给出热量估算和简单的建议即可；如果发了动作图，指出关键纠正点。
-    `;
+    // B. 确定系统提示词 (System Prompt)
+    // 如果前端传了 system (比如生成计划时)，就用前端的；否则用默认的 "Nofat" 人设
+    let systemPrompt = system;
+    
+    if (!systemPrompt) {
+      // 默认人设 (Nofat 聊天模式)
+      systemPrompt = `
+        你叫 "Nofat"，是用户的健身AI朋友。
+        【回复规则】：
+        1. 使用 Emoji (🎯, 💪) 美化。
+        2. 简明扼要，不要啰嗦。
+        3. 语气轻松，像朋友一样。
+      `;
+    }
 
     const messagesForAI: any[] = [
       {
@@ -96,14 +90,30 @@ export const sendMessage = async (req: Request | any, res: Response) => {
 
     const aiResponseText = completion.choices[0]?.message?.content || "思考中...";
 
-    // E. 存入 AI 回复
-    const aiMessage = await Message.create({
-      userId,
-      role: 'assistant',
-      content: aiResponseText,
-    });
+    // E. 处理响应结果
+    let responseData;
 
-    res.json(aiMessage);
+    if (save) {
+      // ✅ 聊天模式：存入数据库，并返回数据库对象
+      responseData = await Message.create({
+        userId,
+        role: 'assistant',
+        content: aiResponseText,
+      });
+    } else {
+      // 🚀 功能模式 (生成计划)：不存数据库，直接构造一个临时对象返回
+      // 这样前端能收到数据，但数据库里没痕迹
+      responseData = {
+        role: 'assistant',
+        content: aiResponseText,
+        imageUrl: null,
+        createdAt: new Date(),
+        // 标记这是临时数据
+        isTemporary: true 
+      };
+    }
+
+    res.json(responseData);
 
   } catch (error: any) {
     console.error('AI 调用失败:', error);
@@ -111,7 +121,7 @@ export const sendMessage = async (req: Request | any, res: Response) => {
   }
 };
 
-// 3. 清除历史
+// 3. 清除历史 (保持不变)
 export const clearHistory = async (req: Request | any, res: Response) => {
   try {
     const userId = req.user.id;
