@@ -12,6 +12,8 @@ export interface AIRequestOptions {
   height: number; // cm
   weight: number; // kg
   waistCircumference?: number; // cm
+  // 👇👇👇 在这里添加 name 字段 👇👇👇
+  name?: string; // 用户昵称
   // 健身信息
   goal: string;
   level: string;
@@ -220,13 +222,17 @@ function buildPrompt(options: AIRequestOptions): string {
 
   const genderText = options.gender === 'male' ? '男性' : '女性';
   const bmi = (options.weight / ((options.height / 100) * (options.height / 100))).toFixed(1);
+  // 👇👇👇 修改开始：获取名字 👇👇👇
+  const userName = options.name || '用户';
 
-  let personalInfo = `请为一名${genderText}客户生成私人定制训练计划，客户个人信息如下：
+  let personalInfo = `请为一名${genderText}客户（昵称：${userName}）生成私人定制训练计划，客户个人信息如下：
+- 姓名：${userName}
 - 年龄：${options.age}岁
 - 性别：${genderText}
 - 身高：${options.height}cm
 - 体重：${options.weight}kg
 - BMI指数：${bmi}`;
+  // 👆👆👆 修改结束 👆👆👆
 
   if (options.waistCircumference) personalInfo += `\n- 腰围：${options.waistCircumference}cm`;
   if (options.injuryHistory) personalInfo += `\n- 伤病史：${options.injuryHistory}`;
