@@ -29,17 +29,16 @@ router.post(
 
       const { name, goal, level, frequency, duration, planData } = req.body;
 
-      const plan = new AIPlan({
-        userId: req.userId,
+      // Sequelize 创建
+      const plan = await AIPlan.create({
+        userId: req.userId!,
         name,
         goal,
         level,
         frequency,
         duration,
-        planData,
+        planData, // 自动处理为 JSON
       });
-
-      await plan.save();
 
       res.status(201).json({
         message: '计划保存成功',
@@ -57,7 +56,10 @@ router.post(
  */
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const plans = await AIPlan.find({ userId: req.userId }).sort({ createdAt: -1 });
+    const plans = await AIPlan.findAll({
+      where: { userId: req.userId! },
+      order: [['createdAt', 'DESC']]
+    });
     res.json({ plans });
   } catch (error) {
     console.error('获取计划错误:', error);
@@ -71,8 +73,10 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response): Promise
 router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const plan = await AIPlan.findOne({
-      _id: req.params.id,
-      userId: req.userId,
+      where: {
+        id: req.params.id,
+        userId: req.userId!,
+      }
     });
 
     if (!plan) {
@@ -92,12 +96,14 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response): Prom
  */
 router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const plan = await AIPlan.findOneAndDelete({
-      _id: req.params.id,
-      userId: req.userId,
+    const deletedCount = await AIPlan.destroy({
+      where: {
+        id: req.params.id,
+        userId: req.userId!,
+      }
     });
 
-    if (!plan) {
+    if (deletedCount === 0) {
       res.status(404).json({ message: '计划不存在' });
       return;
     }
