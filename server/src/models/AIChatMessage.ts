@@ -1,49 +1,55 @@
-import mongoose from 'mongoose';
+import { DataTypes, Model, Optional } from 'sequelize';
+import sequelize from '../config/database';
 
-export interface IAIChatMessage {
-  _id?: string;
+interface AIChatMessageAttributes {
+  id: string;
   userId: string;
   role: 'user' | 'assistant';
   content: string;
-  imageData?: string; // base64 encoded image if present
-  createdAt: Date;
+  imageData?: string;
+  createdAt?: Date;
 }
 
-const AIChatMessageSchema = new mongoose.Schema(
+interface AIChatMessageCreationAttributes extends Optional<AIChatMessageAttributes, 'id'> {}
+
+class AIChatMessage extends Model<AIChatMessageAttributes, AIChatMessageCreationAttributes> implements AIChatMessageAttributes {
+  public id!: string;
+  public userId!: string;
+  public role!: 'user' | 'assistant';
+  public content!: string;
+  public imageData?: string;
+  public readonly createdAt!: Date;
+}
+
+AIChatMessage.init(
   {
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true,
+    },
     userId: {
-      type: String,
-      required: [true, '用户ID不能为空'],
-      index: true,
+      type: DataTypes.UUID,
+      allowNull: false,
     },
     role: {
-      type: String,
-      enum: ['user', 'assistant'],
-      required: true,
+      type: DataTypes.ENUM('user', 'assistant'),
+      allowNull: false,
     },
     content: {
-      type: String,
-      required: [true, '消息内容不能为空'],
+      type: DataTypes.TEXT,
+      allowNull: false,
     },
     imageData: {
-      type: String,
-      default: null,
-    },
-    createdAt: {
-      type: Date,
-      default: Date.now,
-      index: true, // 添加索引以提高查询性能
+      type: DataTypes.TEXT, // 存 Base64 图片
+      allowNull: true,
     },
   },
   {
-    timestamps: {
-      createdAt: true,
-      updatedAt: false, // 聊天消息不需要更新时间
-    },
+    sequelize,
+    tableName: 'ai_chat_messages',
+    updatedAt: false, // 不需要更新时间
   }
 );
 
-// 添加复合索引用于快速查询特定用户的聊天记录
-AIChatMessageSchema.index({ userId: 1, createdAt: -1 });
-
-export default mongoose.model<IAIChatMessage>('AIChatMessage', AIChatMessageSchema);
+export default AIChatMessage;
