@@ -987,7 +987,7 @@ export function WorkoutPage() {
 
       {/* ✅ 新增：预设计划详情弹窗 (包含时间选择器) */}
       <Dialog open={showPlanDetail} onOpenChange={setShowPlanDetail}>
-        <DialogContent className="w-full max-w-lg h-[85vh] flex flex-col bg-slate-900 border-purple-500/30 text-white p-0 gap-0">
+        <DialogContent className="w-full max-w-lg h-[80vh] flex flex-col bg-slate-900 border-purple-500/30 text-white p-0 gap-0">
           
           {/* 固定头部 */}
           <div className="p-6 pb-4 border-b border-purple-500/20 shrink-0">
@@ -997,7 +997,7 @@ export function WorkoutPage() {
           </div>
 
           {/* 可滚动内容区域 */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          <div className="flex-1 overflow-y-auto min-h-0 p-6 space-y-6">
             <div className="space-y-4">
               {/* 动作列表 */}
               {selectedPlan?.details.map((item: any, index: number) => (
