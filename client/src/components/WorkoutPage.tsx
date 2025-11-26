@@ -18,6 +18,7 @@ import {
   clearCurrentAIPlan as clearLocalPlan,
   getUserProfile 
 } from '../services/dataService';
+import { getCurrentUser } from '../services/authService';
 
 export function WorkoutPage() {
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -208,13 +209,16 @@ export function WorkoutPage() {
     setAiStep('loading');
     
     try {
-      // 👇👇👇 修改开始：获取当前用户名字并传入 👇👇👇
-      const userProfile = getUserProfile();
-      const userName = userProfile?.name || userProfile?.email?.split('@')[0] || '';
+      // 👇 双重保险获取名字
+      const userProfile = getUserProfile(); // 这是我们刚才修改过的 dataService
+      const authUser = getCurrentUser();    // 这是 authService
+      
+      // 优先取 authUser 的名字，确保是注册时的昵称
+      const finalName = authUser?.name || userProfile?.name || '专属用户';
 
       const aiRequestData = {
         ...formData,
-        name: userName, // <--- 关键点：把名字传给 AI 服务
+        name: finalName, // 👈 确保这里传进去的是有值的
         frequency: `每周 ${formData.selectedDays.length} 天：[${formData.selectedDays.join('、')}]，时间：${formData.preferredTime}`
       };
       // 👆👆👆 修改结束 👆👆👆
