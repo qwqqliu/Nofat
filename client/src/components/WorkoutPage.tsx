@@ -985,102 +985,106 @@ export function WorkoutPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ✅ 新增：预设计划详情弹窗 (包含时间选择器) */}
+      {/* ✅ 新增：预设计划详情弹窗 (强制滚动修复版 v3) */}
       <Dialog open={showPlanDetail} onOpenChange={setShowPlanDetail}>
-        <DialogContent 
-          // 👇 核心修改：
-          // 1. w-[90vw]: 宽度占屏幕90%
-          // 2. h-[80vh]: 高度占屏幕80% (留出上下空间)
-          // 3. flex flex-col: 强制垂直布局
-          // 4. overflow-hidden: 必须加这个，防止整个弹窗被撑大
-          className="w-[90vw] max-w-lg h-[80vh] flex flex-col gap-0 p-0 bg-slate-900 border-purple-500/30 text-white overflow-hidden"
-        >
+        {/* 
+           修改说明：
+           1. DialogContent 本身不设 flex-col，只设最大高度和 overflow-hidden。
+           2. 内部用一个 flex-col 的 div (main-container) 撑满高度。
+           3. 在 ScrollArea 上方和下方各预留 padding。
+        */}
+        <DialogContent className="w-[95vw] max-w-md h-[85vh] p-0 bg-slate-900 border-purple-500/30 text-white overflow-hidden block">
           
-          {/* 1. 顶部标题 (固定不滚动) */}
-          <div className="p-6 pb-4 border-b border-purple-500/20 shrink-0">
-            <DialogHeader>
-              <DialogTitle className="text-white text-2xl">{selectedPlan?.title}</DialogTitle>
-            </DialogHeader>
-          </div>
+          <div className="flex flex-col h-full w-full">
+            
+            {/* 1. 头部 - 固定 */}
+            <div className="p-5 pb-3 border-b border-purple-500/20 bg-slate-900 shrink-0 z-10">
+              <DialogHeader>
+                <DialogTitle className="text-white text-xl font-bold">{selectedPlan?.title}</DialogTitle>
+              </DialogHeader>
+            </div>
 
-          {/* 2. 中间内容 (滚动区域) */}
-          {/* 👇 核心修改：flex-1 自动占满剩余空间, overflow-y-auto 开启滚动, min-h-0 防止溢出 */}
-          <div className="flex-1 overflow-y-auto min-h-0 p-6 space-y-6 overscroll-contain">
-            <div className="space-y-4">
-              {/* 动作列表 */}
-              {selectedPlan?.details.map((item: any, index: number) => (
-                <div key={index} className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
-                  <h4 className="font-semibold text-lg text-purple-300 mb-2">{item.name}</h4>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                    {item.duration && <div className="flex items-center gap-2"><Clock className="w-4 h-4 text-slate-400"/><span>时长: {item.duration}</span></div>}
-                    {item.sets && <div className="flex items-center gap-2"><Dumbbell className="w-4 h-4 text-slate-400"/><span>组数: {item.sets}</span></div>}
-                    {item.reps && <div className="flex items-center gap-2"><Target className="w-4 h-4 text-slate-400"/><span>次数: {item.reps}</span></div>}
-                    {item.rest && <div className="flex items-center gap-2"><Play className="w-4 h-4 text-slate-400"/><span>休息: {item.rest}</span></div>}
-                  </div>
-                  {item.description && <p className="text-xs text-slate-400 mt-3 pt-3 border-t border-slate-700">{item.description}</p>}
-                </div>
-              ))}
-
-              {/* 时间选择器区域 */}
-              <div className="pt-4 border-t border-purple-500/20 pb-4">
-                <h4 className="font-semibold text-white mb-4 flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-purple-400" /> 
-                  设置执行时间
-                </h4>
-                <div className="bg-slate-800/50 border border-purple-500/20 rounded-lg p-4 space-y-4">
-                  <div className="space-y-2">
-                    <Label className="text-white text-sm">选择训练日 (多选)</Label>
-                    <div className="flex flex-wrap gap-2">
-                      {weekDays.map((day) => (
-                        <button
-                          key={day}
-                          type="button"
-                          onClick={() => togglePresetDay(day)}
-                          className={`px-3 py-2 rounded-md text-sm border transition-all ${
-                            presetSchedule.selectedDays.includes(day)
-                              ? 'bg-purple-600 border-purple-500 text-white shadow-[0_0_10px_rgba(147,51,234,0.5)]'
-                              : 'bg-slate-700 border-slate-600 text-slate-300 hover:bg-slate-600 hover:text-white'
-                          }`}
-                        >
-                          {day}
-                        </button>
-                      ))}
+            {/* 2. 中间 - 滚动区域 */}
+            {/* 关键：flex-1, overflow-y-auto, -webkit-overflow-scrolling: touch */}
+            <div 
+              className="flex-1 overflow-y-auto p-5 space-y-6 bg-slate-900/50"
+              style={{ WebkitOverflowScrolling: 'touch' }} // 修复 iOS 滚动卡顿
+            >
+              <div className="space-y-4 pb-2">
+                {/* 动作列表 */}
+                {selectedPlan?.details.map((item: any, index: number) => (
+                  <div key={index} className="bg-slate-800 p-4 rounded-xl border border-slate-700/50 shadow-sm">
+                    <h4 className="font-semibold text-base text-purple-300 mb-2">{item.name}</h4>
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs text-slate-300">
+                      {item.duration && <div className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-slate-500"/><span>{item.duration}</span></div>}
+                      {item.sets && <div className="flex items-center gap-1.5"><Dumbbell className="w-3.5 h-3.5 text-slate-500"/><span>{item.sets}</span></div>}
+                      {item.reps && <div className="flex items-center gap-1.5"><Target className="w-3.5 h-3.5 text-slate-500"/><span>{item.reps}</span></div>}
+                      {item.rest && <div className="flex items-center gap-1.5"><Play className="w-3.5 h-3.5 text-slate-500"/><span>休息 {item.rest}</span></div>}
                     </div>
-                    {presetSchedule.selectedDays.length === 0 && (
-                      <p className="text-xs text-slate-500 mt-2">
-                        * 如果不设置时间，此计划仅作为参考，不会加入今日计划
-                      </p>
-                    )}
+                    {item.description && <p className="text-xs text-slate-500 mt-3 pt-2 border-t border-slate-700/50 leading-relaxed">{item.description}</p>}
                   </div>
-                  <div className="space-y-2">
-                    <Label className="text-white text-sm">提醒时间</Label>
-                    <Input
-                      type="time"
-                      value={presetSchedule.preferredTime}
-                      onChange={(e) => setPresetSchedule({ ...presetSchedule, preferredTime: e.target.value })}
-                      className="bg-slate-700 border-slate-600 text-white w-full block h-12 text-lg px-4"
-                    />
+                ))}
+
+                {/* 时间选择器区域 */}
+                <div className="pt-2 mt-4 border-t border-purple-500/10">
+                  <h4 className="font-semibold text-white mb-3 flex items-center gap-2 text-sm">
+                    <Calendar className="w-4 h-4 text-purple-400" /> 
+                    设置执行时间
+                  </h4>
+                  <div className="bg-slate-800/30 border border-purple-500/10 rounded-xl p-4 space-y-4">
+                    <div className="space-y-2">
+                      <Label className="text-slate-300 text-xs">选择训练日</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {weekDays.map((day) => (
+                          <button
+                            key={day}
+                            type="button"
+                            onClick={() => togglePresetDay(day)}
+                            className={`px-2.5 py-1.5 rounded-lg text-xs border transition-all ${
+                              presetSchedule.selectedDays.includes(day)
+                                ? 'bg-purple-600 border-purple-500 text-white shadow-md'
+                                : 'bg-slate-700/50 border-slate-600 text-slate-400 hover:bg-slate-600'
+                            }`}
+                          >
+                            {day}
+                          </button>
+                        ))}
+                      </div>
+                      {presetSchedule.selectedDays.length === 0 && (
+                        <p className="text-[10px] text-slate-500 mt-1">
+                          * 请至少选择一天
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-slate-300 text-xs">提醒时间</Label>
+                      <Input
+                        type="time"
+                        value={presetSchedule.preferredTime}
+                        onChange={(e) => setPresetSchedule({ ...presetSchedule, preferredTime: e.target.value })}
+                        className="bg-slate-700/50 border-slate-600 text-white w-full h-10 text-sm px-3"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* 3. 底部按钮 (固定不滚动) */}
-          {/* 👇 核心修改：z-20 确保浮在内容上面, bg-slate-900 遮挡背景 */}
-          <div className="p-6 pt-4 border-t border-purple-500/20 bg-slate-900 shrink-0 flex gap-3 z-20">
-            <Button variant="outline" onClick={() => setShowPlanDetail(false)} className="flex-1 bg-slate-800 border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-white">关闭</Button>
-            
-            {presetSchedule.selectedDays.length > 0 && (
-              <Button 
-                onClick={activatePresetPlan} 
-                className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white border-0 shadow-lg"
-              >
-                启用此计划
-              </Button>
-            )}
-          </div>
+            {/* 3. 底部 - 固定 */}
+            <div className="p-5 pt-3 border-t border-purple-500/20 bg-slate-900 shrink-0 flex gap-3 z-20 shadow-[0_-10px_20px_rgba(0,0,0,0.3)]">
+              <Button variant="outline" onClick={() => setShowPlanDetail(false)} className="flex-1 bg-slate-800 border-slate-600 text-slate-300 hover:bg-slate-700 h-11">关闭</Button>
+              
+              {presetSchedule.selectedDays.length > 0 && (
+                <Button 
+                  onClick={activatePresetPlan} 
+                  className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 text-white border-0 shadow-lg h-11"
+                >
+                  启用计划
+                </Button>
+              )}
+            </div>
 
+          </div>
         </DialogContent>
       </Dialog>
     </div>
