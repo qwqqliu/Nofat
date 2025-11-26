@@ -153,7 +153,10 @@ export async function askAIQuestion(question: string, userContext?: any): Promis
     // 2. 构建用户上下文 (拼接到 User Content 中)
     let userContent = "";
     if (userContext) {
-      userContent += `【用户信息：${userContext.level} | ${userContext.age}岁 | ${userContext.weight}kg | 目标:${userContext.goal}】\n`;
+      // 👇 修改点：显式加入 "称呼/姓名"
+      const userName = userContext.name || '用户';
+      
+      userContent += `【用户信息：称呼"${userName}" | ${userContext.level || '初级'} | ${userContext.age}岁 | ${userContext.weight}kg | 目标:${userContext.goal}】\n`;
     }
     userContent += question;
 
@@ -256,7 +259,7 @@ function buildPrompt(options: AIRequestOptions): string {
 
 请以以下 JSON 格式返回计划，不要包含任何其他文本（也不要包含 Markdown 代码块标记）：
 {
-  "name": "计划名称（如：李四12周增肌计划）",
+  "name": "计划名称（例如：${userName}的12周${goalMap[options.goal] || '训练'}计划）", 
   "duration": "计划周期（如：12周）",
   "goal": {
     "name": "目标名称",
