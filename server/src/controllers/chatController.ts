@@ -93,6 +93,13 @@ export const sendMessage = async (req: Request | any, res: Response) => {
     });
 
     const aiResponseText = completion.choices[0]?.message?.content || "思考中...";
+    // 👇👇👇【核心修改】：暴力清洗，无论 AI 听不听话，强制删掉所有星号 👇👇👇
+    // 1. 去掉加粗的 ** (全局替换)
+    aiResponseText = aiResponseText.replace(/\*\*/g, '');
+    // 2. 去掉单个的 * (防止列表符号漏网)
+    aiResponseText = aiResponseText.replace(/\*/g, '');
+    // 3. (可选) 顺手把 markdown 的标题 # 也去掉，防止大字体
+    aiResponseText = aiResponseText.replace(/^#+\s/gm, '');
 
     // E. 处理响应结果
     let responseData;
