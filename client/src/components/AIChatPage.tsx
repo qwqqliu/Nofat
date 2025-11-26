@@ -166,6 +166,7 @@ export function AIChatPage() {
       }
 
       const response = await askAIQuestion(requestContent, {
+        name: profile.name, // 👈 关键新增：必须把名字传给 service
         age: profile.age,
         gender: profile.gender,
         height: profile.height,
