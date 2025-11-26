@@ -987,18 +987,25 @@ export function WorkoutPage() {
 
       {/* ✅ 新增：预设计划详情弹窗 (包含时间选择器) */}
       <Dialog open={showPlanDetail} onOpenChange={setShowPlanDetail}>
-        {/* 👇 修改 1: 使用 h-[80vh] 固定高度 */}
-        <DialogContent className="w-full max-w-lg h-[80vh] p-0 bg-slate-900 border-purple-500/30 text-white gap-0 overflow-hidden flex flex-col">
+        <DialogContent 
+          // 👇 核心修改：
+          // 1. w-[90vw]: 宽度占屏幕90%
+          // 2. h-[80vh]: 高度占屏幕80% (留出上下空间)
+          // 3. flex flex-col: 强制垂直布局
+          // 4. overflow-hidden: 必须加这个，防止整个弹窗被撑大
+          className="w-[90vw] max-w-lg h-[80vh] flex flex-col gap-0 p-0 bg-slate-900 border-purple-500/30 text-white overflow-hidden"
+        >
           
-          {/* 1. 头部 - 固定 */}
+          {/* 1. 顶部标题 (固定不滚动) */}
           <div className="p-6 pb-4 border-b border-purple-500/20 shrink-0">
             <DialogHeader>
               <DialogTitle className="text-white text-2xl">{selectedPlan?.title}</DialogTitle>
             </DialogHeader>
           </div>
 
-          {/* 2. 中间 - 滚动区域 (关键: flex-1, overflow-y-auto) */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-6 min-h-0">
+          {/* 2. 中间内容 (滚动区域) */}
+          {/* 👇 核心修改：flex-1 自动占满剩余空间, overflow-y-auto 开启滚动, min-h-0 防止溢出 */}
+          <div className="flex-1 overflow-y-auto min-h-0 p-6 space-y-6 overscroll-contain">
             <div className="space-y-4">
               {/* 动作列表 */}
               {selectedPlan?.details.map((item: any, index: number) => (
@@ -1015,7 +1022,7 @@ export function WorkoutPage() {
               ))}
 
               {/* 时间选择器区域 */}
-              <div className="pt-4 border-t border-purple-500/20 pb-4"> {/* 加个 pb-4 确保底部有空隙 */}
+              <div className="pt-4 border-t border-purple-500/20 pb-4">
                 <h4 className="font-semibold text-white mb-4 flex items-center gap-2">
                   <Calendar className="w-4 h-4 text-purple-400" /> 
                   设置执行时间
@@ -1059,8 +1066,9 @@ export function WorkoutPage() {
             </div>
           </div>
 
-          {/* 3. 底部 - 固定 */}
-          <div className="p-6 pt-4 border-t border-purple-500/20 bg-slate-900 shrink-0 flex gap-3 z-10">
+          {/* 3. 底部按钮 (固定不滚动) */}
+          {/* 👇 核心修改：z-20 确保浮在内容上面, bg-slate-900 遮挡背景 */}
+          <div className="p-6 pt-4 border-t border-purple-500/20 bg-slate-900 shrink-0 flex gap-3 z-20">
             <Button variant="outline" onClick={() => setShowPlanDetail(false)} className="flex-1 bg-slate-800 border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-white">关闭</Button>
             
             {presetSchedule.selectedDays.length > 0 && (
