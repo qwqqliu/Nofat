@@ -2,7 +2,6 @@
 import { API_BASE_URL } from './config';
 
 // 认证服务 - 处理注册、登录、令牌管理
-// const API_URL = '/api';  <-- 【删除这行】这行是罪魁祸首！
 const STORAGE_KEY_TOKEN = 'auth_token';
 const STORAGE_KEY_USER = 'current_user';
 
@@ -24,11 +23,12 @@ export interface AuthResponse {
 }
 
 /**
- * 用户注册
+ * 用户注册 - 核心修改点
+ * 1. 入参增加了 name?
+ * 2. body 中增加了 name
  */
-export async function register(email: string, password: string): Promise<AuthResponse> {
+export async function register(email: string, password: string, name?: string): Promise<AuthResponse> {
   try {
-    // 这里你写的是对的，用的是 API_BASE_URL
     const response = await fetch(`${API_BASE_URL}/auth/register`, {
       method: 'POST',
       headers: {
@@ -37,6 +37,7 @@ export async function register(email: string, password: string): Promise<AuthRes
       body: JSON.stringify({
         email,
         password,
+        name, // 👈 关键修复：把前端填写的昵称发送给后端
       }),
     });
 
@@ -70,11 +71,10 @@ export async function register(email: string, password: string): Promise<AuthRes
 }
 
 /**
- * 用户登录
+ * 用户登录 (无需修改，登录成功后后端会返回包含 name 的 user 对象，这里已经自动保存了)
  */
 export async function login(email: string, password: string): Promise<AuthResponse> {
   try {
-    // ↓↓↓ 【修改这里】 把 API_URL 改成 API_BASE_URL
     const response = await fetch(`${API_BASE_URL}/auth/login`, {
       method: 'POST',
       headers: {
