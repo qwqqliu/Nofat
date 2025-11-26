@@ -987,47 +987,54 @@ export function WorkoutPage() {
 
       {/* ✅ 新增：预设计划详情弹窗 (强制滚动修复版 v3) */}
       <Dialog open={showPlanDetail} onOpenChange={setShowPlanDetail}>
-        
-        {/* 
-           修改说明：
-           1. max-h-[85vh]: 限制最大高度为屏幕的 85%，防止撑爆屏幕 (关键!)
-           2. w-[90vw]: 移动端宽度适配
-           3. flex flex-col: 开启垂直布局
-           4. p-0: 清除默认内边距，我们在内部自己控制
-        */}
-        <DialogContent className="w-[90vw] max-w-lg max-h-[85vh] flex flex-col p-0 bg-slate-900 border-purple-500/30 text-white">
+        <DialogContent
+          // 基础外观用 Tailwind，布局结构用 style 强控
+          className="w-[90vw] max-w-md p-0 bg-slate-900 border-purple-500/30 text-white"
+          style={{
+            height: '80vh',           // 强制高度为屏幕 80%
+            maxHeight: '80vh',        // 双重保险
+            display: 'flex',          // 强制 Flex 布局
+            flexDirection: 'column',  // 垂直排列
+            overflow: 'hidden',       // 隐藏整体溢出
+            gap: 0                    // 清除 Radix UI 默认的 gap
+          }}
+        >
           
-          {/* 1. 头部区域 (固定不动) */}
-          <div className="p-5 border-b border-purple-500/20 shrink-0">
+          {/* 1. 头部 - 固定不滚动 */}
+          <div className="shrink-0 p-5 pb-4 border-b border-purple-500/20 bg-slate-900 z-10">
             <DialogHeader>
               <DialogTitle className="text-white text-xl font-bold">{selectedPlan?.title}</DialogTitle>
             </DialogHeader>
           </div>
 
-          {/* 2. 内容区域 (可滚动) 
-             - flex-1: 占据剩余所有空间
-             - overflow-y-auto: 内容多了显示滚动条
-          */}
-          <div className="flex-1 overflow-y-auto p-5 space-y-6">
-            
+          {/* 2. 中间内容 - 核心滚动区 */}
+          <div 
+            className="p-5 space-y-6"
+            style={{
+              flex: 1,                    // 占据剩余空间
+              overflowY: 'auto',          // 开启垂直滚动
+              minHeight: 0,               // 修复 Flex 溢出 bug 的核心
+              WebkitOverflowScrolling: 'touch' // iOS 流畅滚动支持
+            }}
+          >
             {/* 动作列表 */}
             <div className="space-y-4">
               {selectedPlan?.details.map((item: any, index: number) => (
-                <div key={index} className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
+                <div key={index} className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50 shadow-sm">
                   <h4 className="font-semibold text-base text-purple-300 mb-2">{item.name}</h4>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm text-slate-300">
-                    {item.duration && <div className="flex items-center gap-2"><Clock className="w-3.5 h-3.5 text-slate-500"/><span>{item.duration}</span></div>}
-                    {item.sets && <div className="flex items-center gap-2"><Dumbbell className="w-3.5 h-3.5 text-slate-500"/><span>{item.sets}</span></div>}
-                    {item.reps && <div className="flex items-center gap-2"><Target className="w-3.5 h-3.5 text-slate-500"/><span>{item.reps}</span></div>}
-                    {item.rest && <div className="flex items-center gap-2"><Play className="w-3.5 h-3.5 text-slate-500"/><span>休息 {item.rest}</span></div>}
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs text-slate-300">
+                    {item.duration && <div className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-slate-500"/><span>{item.duration}</span></div>}
+                    {item.sets && <div className="flex items-center gap-1.5"><Dumbbell className="w-3.5 h-3.5 text-slate-500"/><span>{item.sets}</span></div>}
+                    {item.reps && <div className="flex items-center gap-1.5"><Target className="w-3.5 h-3.5 text-slate-500"/><span>{item.reps}</span></div>}
+                    {item.rest && <div className="flex items-center gap-1.5"><Play className="w-3.5 h-3.5 text-slate-500"/><span>休息 {item.rest}</span></div>}
                   </div>
-                  {item.description && <p className="text-xs text-slate-500 mt-3 pt-2 border-t border-slate-700/50">{item.description}</p>}
+                  {item.description && <p className="text-xs text-slate-500 mt-3 pt-2 border-t border-slate-700/50 leading-relaxed">{item.description}</p>}
                 </div>
               ))}
             </div>
 
-            {/* 时间选择器区域 */}
-            <div className="pt-2 mt-4 border-t border-purple-500/20">
+            {/* 时间选择器 */}
+            <div className="pt-4 border-t border-purple-500/10 pb-2">
               <h4 className="font-semibold text-white mb-3 flex items-center gap-2 text-sm">
                 <Calendar className="w-4 h-4 text-purple-400" /> 
                 设置执行时间
@@ -1070,8 +1077,8 @@ export function WorkoutPage() {
             </div>
           </div>
 
-          {/* 3. 底部按钮区域 (固定不动) */}
-          <div className="p-5 border-t border-purple-500/20 bg-slate-900 shrink-0 flex gap-3">
+          {/* 3. 底部 - 固定不滚动 */}
+          <div className="shrink-0 p-5 pt-3 border-t border-purple-500/20 bg-slate-900 z-10 flex gap-3 shadow-[0_-5px_10px_rgba(0,0,0,0.2)]">
             <Button variant="outline" onClick={() => setShowPlanDetail(false)} className="flex-1 bg-slate-800 border-slate-600 text-slate-300 hover:bg-slate-700">
               关闭
             </Button>
