@@ -987,17 +987,18 @@ export function WorkoutPage() {
 
       {/* ✅ 新增：预设计划详情弹窗 (包含时间选择器) */}
       <Dialog open={showPlanDetail} onOpenChange={setShowPlanDetail}>
-        <DialogContent className="w-full max-w-lg h-[80vh] flex flex-col bg-slate-900 border-purple-500/30 text-white p-0 gap-0">
+        {/* 👇 修改 1: 使用 h-[80vh] 固定高度 */}
+        <DialogContent className="w-full max-w-lg h-[80vh] p-0 bg-slate-900 border-purple-500/30 text-white gap-0 overflow-hidden flex flex-col">
           
-          {/* 固定头部 */}
+          {/* 1. 头部 - 固定 */}
           <div className="p-6 pb-4 border-b border-purple-500/20 shrink-0">
             <DialogHeader>
               <DialogTitle className="text-white text-2xl">{selectedPlan?.title}</DialogTitle>
             </DialogHeader>
           </div>
 
-          {/* 可滚动内容区域 */}
-          <div className="flex-1 overflow-y-auto min-h-0 p-6 space-y-6">
+          {/* 2. 中间 - 滚动区域 (关键: flex-1, overflow-y-auto) */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-6 min-h-0">
             <div className="space-y-4">
               {/* 动作列表 */}
               {selectedPlan?.details.map((item: any, index: number) => (
@@ -1014,7 +1015,7 @@ export function WorkoutPage() {
               ))}
 
               {/* 时间选择器区域 */}
-              <div className="pt-4 border-t border-purple-500/20">
+              <div className="pt-4 border-t border-purple-500/20 pb-4"> {/* 加个 pb-4 确保底部有空隙 */}
                 <h4 className="font-semibold text-white mb-4 flex items-center gap-2">
                   <Calendar className="w-4 h-4 text-purple-400" /> 
                   设置执行时间
@@ -1058,11 +1059,10 @@ export function WorkoutPage() {
             </div>
           </div>
 
-          {/* 固定底部按钮 */}
-          <div className="p-6 pt-4 border-t border-purple-500/20 bg-slate-900 shrink-0 flex gap-3">
+          {/* 3. 底部 - 固定 */}
+          <div className="p-6 pt-4 border-t border-purple-500/20 bg-slate-900 shrink-0 flex gap-3 z-10">
             <Button variant="outline" onClick={() => setShowPlanDetail(false)} className="flex-1 bg-slate-800 border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-white">关闭</Button>
             
-            {/* 只有选了日期，按钮才可用 */}
             {presetSchedule.selectedDays.length > 0 && (
               <Button 
                 onClick={activatePresetPlan} 
