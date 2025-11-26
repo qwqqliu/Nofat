@@ -1,4 +1,6 @@
 // 数据管理系统 - 本地存储
+import { getCurrentUser } from './authService';
+
 export interface UserProfile {
   id: string;
   name: string;
@@ -72,29 +74,31 @@ const STORAGE_KEYS = {
 };
 
 /**
- * 获取用户资料
+ * 获取用户资料 (修复版：融合 Auth 数据)
  */
 export function getUserProfile(): UserProfile {
+  // 1. 先尝试获取健身档案数据
   const stored = localStorage.getItem(STORAGE_KEYS.USER_PROFILE);
-  if (stored) {
-    return JSON.parse(stored);
-  }
-  
-  // 返回空用户资料（需要用户填充）
-  const emptyProfile: UserProfile = {
+  let profile: UserProfile = stored ? JSON.parse(stored) : {
     id: 'user_' + Date.now(),
     name: '',
-    age: undefined,
-    gender: undefined,
-    height: undefined,
-    weight: undefined,
-    waistCircumference: undefined,
-    goal: undefined,
-    level: undefined,
     joinDate: new Date().toISOString().split('T')[0],
   };
+
+  // 2. 👇 关键修复：强制从 Auth 系统同步昵称和头像
+  // 这样注册时填写的昵称就能被这里读取到了
+  const authUser = getCurrentUser();
+  if (authUser) {
+    profile = {
+      ...profile, // 保留原有的身高体重数据
+      name: authUser.name || profile.name || '用户', // 优先用登录名
+      avatar: authUser.avatar || profile.avatar, // 优先用登录头像
+      // 如果 authUser 有 ID，也可以同步 ID
+      id: authUser.id || profile.id
+    };
+  }
   
-  return emptyProfile;
+  return profile;
 }
 
 /**
