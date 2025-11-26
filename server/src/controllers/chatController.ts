@@ -92,15 +92,20 @@ export const sendMessage = async (req: Request | any, res: Response) => {
       messages: messagesForAI,
     });
 
-    const aiResponseText = completion.choices[0]?.message?.content || "思考中...";
-    // 👇👇👇【核心修改】：暴力清洗，无论 AI 听不听话，强制删掉所有星号 👇👇👇
-    // 1. 去掉加粗的 ** (全局替换)
-    aiResponseText = aiResponseText.replace(/\*\*/g, '');
-    // 2. 去掉单个的 * (防止列表符号漏网)
-    aiResponseText = aiResponseText.replace(/\*/g, '');
-    // 3. (可选) 顺手把 markdown 的标题 # 也去掉，防止大字体
-    aiResponseText = aiResponseText.replace(/^#+\s/gm, '');
+    // 👇👇👇 【关键修改点】 👇👇👇
+    
+    // 1. 获取原始文本 (用 let 或者 const 都可以，这里暂存一下)
+    const rawContent = completion.choices[0]?.message?.content || "思考中...";
 
+    // 2. 定义最终文本 (使用 let，或者直接在这里链式处理)
+    // 这里直接生成清洗后的文本，不复用变量名，避免 const/let 混淆
+    const aiResponseText = rawContent
+      .replace(/\*\*/g, '')      // 全局删除双星号 (加粗)
+      .replace(/\*/g, '')        // 全局删除单星号 (列表)
+      .replace(/^#+\s/gm, '')    // 全局删除标题符 (# )
+      .replace(/`/g, '');        // (可选) 顺手删掉代码块符号
+
+    // 👆 此时 aiResponseText 已经是干净的了
     // E. 处理响应结果
     let responseData;
 
